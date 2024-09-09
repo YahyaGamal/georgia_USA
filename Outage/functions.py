@@ -8,7 +8,7 @@ python_directory = os.path.dirname(os.path.realpath(__file__))
 
 def analyse_df (df_dict, save_directory=rf"{python_directory}/Outputs"):
     """
-    Analyse a file of type `Pandas.DataFrame` and save the outcome as a pickle file in the `directory`. Indices in the input dictionary `df_dict` are used as the name of the pickle files.
+    Analyses a file of type `Pandas.DataFrame` and save the outcome as a pickle file in the `directory`. Indices in the input dictionary `df_dict` are used as the name of the pickle files.
 
     Inputs
     ------
@@ -28,21 +28,32 @@ def analyse_df (df_dict, save_directory=rf"{python_directory}/Outputs"):
         df_output = df_gerogia.groupby("fips_code", as_index=False)["sum"].sum()
         df_output.to_pickle(rf"{save_directory}\pickle_{save_as}.pkl")
         dict_output[i] = df_output
+
     return (dict_output)
 
-def clean_geodf(geo_df=gpd.read_file(rf"{python_directory}\Data\georgia_counties.shp")):
+def clean_shp (geo_df=gpd.read_file(rf"{python_directory}\Data\georgia_counties.shp")):
+    """
+    Transforms the "id" column in the shapefile from str to int.
+
+    Inputs
+    ------
+        - `geo_df`: `gpd.DataFrame` file read from a shapefile
+    """
     geo_df["id"] = [int(e) for e in geo_df["id"]]
     geo_df.to_pickle(rf"{python_directory}\Outputs\georgia_counties.pkl")
     return(geo_df)
 
-def create_geodf (df_dict, geo_df=False, save_directory=rf"{python_directory}\Outputs"):
+def create_geodf (df_dict, geo_df=False, population_df=False, save_directory=rf"{python_directory}\Outputs", ):
     """
-    Creates a geodf and saves as shape file
+    Creates a geodf and saves it as a shape file
 
     Inputs
     ------
+
         - `df_dict`: a dictionary of `Pandas.DataFrame` files to join to the geopanadas DataFrame
+
         - `geo_df`: `gpd.DataFrame` file map of Georgia, USA
+
         - `save_directory`: Folder to save the outputs to
 
     Returns
@@ -55,13 +66,16 @@ def create_geodf (df_dict, geo_df=False, save_directory=rf"{python_directory}\Ou
     for i in df_dict:
         df = df_dict[i]
         geodf_output = geo_df.merge(right= df, left_on= "id", right_on= "fips_code")
+        if isinstance(population_df, pd.DataFrame): 
+            geodf_output = geodf_output.merge(right= population_df, left_on= "id", right_on= "fips")
+            geodf_output["normalised"] = [geodf_output.at[index, "sum"] / geodf_output.at[index, "pop2020"] for index in geodf_output.index ]
         dict_output[i] = geodf_output
     return(dict_output)
 
 
 def plot_geodf(geo_df_dict, save_directory=rf"{python_directory}\Plots"):
     """
-    Plot maps to `\Plots`. Indices in the input dictionary `geo_df_dict` are used as the name of the png files.
+    Plots maps to `\Plots`. Indices in the input dictionary `geo_df_dict` are used as the name of the png files.
 
     Inputs
     ------
@@ -69,9 +83,17 @@ def plot_geodf(geo_df_dict, save_directory=rf"{python_directory}\Plots"):
         - `save_directory`: Folder to save the outputs to
     """
     for i in geo_df_dict:
+        ## raw
         geo_df = geo_df_dict[i]
         title = i
         geo_df.plot("sum", legend=True)
         plt.title(i)
         plt.savefig(rf"{save_directory}\{title}.png")
+        plt.close()
+        ## normalised
+        geo_df = geo_df_dict[i]
+        title = i
+        geo_df.plot("normalised", legend=True)
+        plt.title(i)
+        plt.savefig(rf"{save_directory}\normalised_{title}.png")
         plt.close()
